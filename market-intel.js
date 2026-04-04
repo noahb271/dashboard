@@ -1,8 +1,32 @@
-const TD_KEY = typeof CONFIG !== 'undefined' ? CONFIG.TD_KEY : '';
-const FH_KEY = typeof CONFIG !== 'undefined' ? CONFIG.FINNHUB_KEY : '';
-const FRED_KEY = typeof CONFIG !== 'undefined' ? CONFIG.FRED_KEY : '';
+// API key variables (fallback to empty if backend is used)
+const TD_KEY = '';  // No longer needed - using backend
+const FH_KEY = '';  // No longer needed - using backend
+const FRED_KEY = '';  // No longer needed - using backend
 
-const DEFAULT_WATCHLIST = ['SPY','QQQ','DIA','IWM','VTI','VOO','XLK','XLF','XLE','GLD','SLV','USO','AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM'];
+// Backend API base URL
+const BACKEND_URL = 'http://localhost:8001/api';
+
+// Helper function to fetch from backend with fallback
+async function fetchFromBackend(endpoint, options = {}) {
+  try {
+    const hasBody = options.body !== undefined;
+    const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+      method: options.method || 'GET',
+      headers: {
+        ...(hasBody && { 'Content-Type': 'application/json' }),
+        ...options.headers
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.warn(`Backend fetch failed for ${endpoint}:`, error);
+    return null;  // Return null to trigger fallback
+  }
+}
+
+const DEFAULT_WATCHLIST = ['SPY','QQQ','DIA','IWM','VTI','VOO','GLD','SLV','AAPL','MSFT'];
 const BENCHMARKS = ['SPY','QQQ','DIA','IWM','VIX'];
 const COMMODITY_SYMBOLS = [
   { symbol: 'USO', label: 'WTI Crude Proxy' },
@@ -132,21 +156,60 @@ function renderTicker() {
 }
 
 function renderBenchmarks() {
-  const wrap = document.getElementById('benchmarkGrid');
+  const wrap = document.getElementById('benchmarkTable');
   wrap.innerHTML = BENCHMARKS.map(symbol => {
     const q = quoteFor(symbol);
-    const closes = benchmarkSeries(symbol);
+    const isVix = symbol === 'VIX';
+    const price = isVix ? Number(q.price || 0).toFixed(2) : formatMoney(q.price);
+    const change = formatPct(q.changePct);
     return `
-      <article class="benchmark-card">
-        <div class="benchmark-symbol">${symbol}</div>
-        <div class="benchmark-price ${symbol === 'VIX' ? '' : ''}">${symbol === 'VIX' ? Number(q.price || 0).toFixed(2) : formatMoney(q.price)}</div>
-        <div class="benchmark-change ${classForChange(q.changePct)}">${formatPct(q.changePct)}</div>
-        <svg class="benchmark-spark" viewBox="0 0 78 22" preserveAspectRatio="none">
-          <path d="${sparklinePath(closes)}"></path>
-        </svg>
-      </article>
+      <div class="market-row">
+        <div class="market-symbol">${symbol}</div>
+        <div class="market-name">${isVix ? 'Volatility Index' : 'Index'}</div>
+        <div class="market-price">${price}</div>
+        <div class="market-change ${classForChange(q.changePct)}">${change}</div>
+      </div>
     `;
   }).join('');
+}
+
+function renderMacro() {
+  const wrap = document.getElementById('macroTable');
+  const rows = [];
+  
+  // Commodities
+  COMMODITY_SYMBOLS.forEach(item => {
+    const q = quoteFor(item.symbol);
+    rows.push(`
+      <div class="market-row">
+        <div class="market-symbol">${item.symbol}</div>
+        <div class="market-name">${item.label}</div>
+        <div class="market-price">${formatMoney(q.price)}</div>
+        <div class="market-change ${classForChange(q.changePct)}">${formatPct(q.changePct)}</div>
+      </div>
+    `);
+  });
+  
+  // Yields
+  const yieldRows = [
+    { label: '2Y Treasury', key: '2Y', value: state.yields['2Y'] },
+    { label: '10Y Treasury', key: '10Y', value: state.yields['10Y'] },
+    { label: 'SOFR', key: 'sofr', value: state.rates.sofr }
+  ];
+  
+  yieldRows.forEach(item => {
+    const val = Number(item.value) || 0;
+    rows.push(`
+      <div class="market-row">
+        <div class="market-symbol">${item.key}</div>
+        <div class="market-name">${item.label}</div>
+        <div class="market-price">${val.toFixed(2)}%</div>
+        <div class="market-change">&mdash;</div>
+      </div>
+    `);
+  });
+  
+  wrap.innerHTML = rows.join('');
 }
 
 function renderWatchlist() {
@@ -180,14 +243,11 @@ function renderWatchlist() {
 function renderNews() {
   const wrap = document.getElementById('updatesList');
   wrap.innerHTML = state.news.map(item => `
-    <article class="update-row">
-      <div class="update-age">• ${item.age}</div>
-      <div class="update-body">
-        <div class="update-source">${item.source}</div>
-        <div class="update-headline">${item.headline}</div>
-      </div>
-      <div class="update-tag">${item.tag || 'MKT'}</div>
-    </article>
+    <div class="news-item">
+      <div class="news-source">${item.source}</div>
+      <div class="news-headline">${item.headline}</div>
+      <div class="news-age">${item.age}</div>
+    </div>
   `).join('');
 }
 
@@ -275,100 +335,131 @@ function summarizeResearch(query) {
   `;
 }
 
-function renderResearch(query = "What's going on with the markets today?") {
-  document.getElementById('researchOutput').innerHTML = summarizeResearch(query);
-}
-
-function initResearch() {
-  const form = document.getElementById('researchForm');
-  const input = document.getElementById('researchInput');
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const query = input.value.trim();
-    if (!query) return;
-    renderResearch(query);
+async function renderResearch(query = "What's going on with the markets today?") {
+  const summaryData = await fetchFromBackend('/research-summary', { 
+    method: 'POST', 
+    body: { symbols: ['SPY', 'QQQ', 'VIX'] } 
   });
-  document.querySelectorAll('.prompt-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      input.value = btn.dataset.prompt;
-      renderResearch(btn.dataset.prompt);
-    });
-  });
-  renderResearch();
-}
-
-async function fetchTDSeries(symbol) {
-  if (!TD_KEY) return null;
-  try {
-    const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=12&apikey=${TD_KEY}`);
-    const data = await res.json();
-    if (!Array.isArray(data.values)) return null;
-    const values = data.values.slice().reverse().map(v => ({
-      close: Number(v.close),
-      datetime: v.datetime
-    })).filter(v => Number.isFinite(v.close));
-    if (values.length < 2) return null;
-    const closes = values.map(v => v.close);
-    const price = closes.at(-1);
-    const prev = closes.at(-2);
-    return { price, changePct: ((price - prev) / prev) * 100, closes };
-  } catch {
-    return null;
+  
+  if (summaryData) {
+    // Use backend summary if available
+    document.getElementById('researchOutput').innerHTML = `
+      <div class="research-answer">
+        <p>${summaryData.summary || 'Market analysis unavailable.'}</p>
+        <h4>Market tone</h4>
+        <p>${summaryData.market_tone || 'Data not available.'}</p>
+        <h4>Volatility risk</h4>
+        <p>${summaryData.volatility_risk || 'Data not available.'}</p>
+        <h4>Commodities & rates</h4>
+        <p>${summaryData.commodities_rates || 'Data not available.'}</p>
+        <h4>Headlines</h4>
+        <p>${summaryData.headlines || 'No recent headlines.'}</p>
+        <h4>Conclusion</h4>
+        <p>${summaryData.conclusion || 'Analysis incomplete.'}</p>
+      </div>
+    `;
+  } else {
+    // Fallback to local summary
+    document.getElementById('researchOutput').innerHTML = summarizeResearch(query);
   }
 }
 
+async function initResearch() {
+  const form = document.getElementById('researchForm');
+  const input = document.getElementById('researchInput');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const query = input.value.trim();
+    if (!query) return;
+    await renderResearch(query);
+  });
+  document.querySelectorAll('.prompt-chip').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      input.value = btn.dataset.prompt;
+      await renderResearch(btn.dataset.prompt);
+    });
+  });
+  await renderResearch();
+}
+
+async function fetchTDSeries(symbol) {
+  const data = await fetchFromBackend(`/candles?symbol=${encodeURIComponent(symbol)}&interval=1day&limit=12`);
+  if (!data || !Array.isArray(data.values)) return null;
+  const values = data.values.slice().reverse().map(v => ({
+    close: Number(v.close),
+    datetime: v.datetime
+  })).filter(v => Number.isFinite(v.close));
+  if (values.length < 2) return null;
+  const closes = values.map(v => v.close);
+  const price = closes.at(-1);
+  const prev = closes.at(-2);
+  return { price, changePct: ((price - prev) / prev) * 100, closes };
+}
+
 async function fetchQuote(symbol) {
+  const data = await fetchFromBackend(`/quote?symbol=${encodeURIComponent(symbol)}`);
+  if (data && Number.isFinite(Number(data.close))) {
+    const price = Number(data.close);
+    const prevClose = Number(data.previous_close) || price;
+    const changePct = ((price - prevClose) / prevClose) * 100;
+    state.quotes[symbol] = { price, changePct };
+    return;
+  }
+  
+  // Fallback to series data if quote fails
   const series = await fetchTDSeries(symbol);
   if (series) {
     state.series[symbol] = series.closes;
     state.quotes[symbol] = { price: series.price, changePct: series.changePct };
-    return;
-  }
-  if (FH_KEY) {
-    try {
-      const map = { VIX: '^VIX' };
-      const lookup = map[symbol] || symbol;
-      const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(lookup)}&token=${FH_KEY}`);
-      const data = await res.json();
-      if (Number.isFinite(data.c)) {
-        const prev = Number(data.pc) || data.c;
-        state.quotes[symbol] = { price: data.c, changePct: ((data.c - prev) / prev) * 100 };
-      }
-    } catch {}
   }
 }
 
 async function loadQuotes() {
   const symbols = [...new Set([...BENCHMARKS, ...state.watchlist, ...COMMODITY_SYMBOLS.map(x => x.symbol), ...MEGACAP_SYMBOLS])];
-  await Promise.all(symbols.map(fetchQuote));
+  
+  // Use batch quotes endpoint for efficiency
+  const batchData = await fetchFromBackend('/quotes', { 
+    method: 'POST', 
+    body: symbols 
+  });
+  
+  if (batchData) {
+    // Process batch results
+    for (const symbol of symbols) {
+      const quoteData = batchData[symbol];
+      if (quoteData && !quoteData.error) {
+        state.quotes[symbol] = {
+          price: Number(quoteData.close || quoteData.price),
+          changePct: Number(quoteData.change_percent || quoteData.percent_change) || 0
+        };
+      }
+    }
+  } else {
+    // Fallback to individual calls if batch fails
+    await Promise.all(symbols.map(fetchQuote));
+  }
+  
   renderBenchmarks();
+  renderMacro();
   renderWatchlist();
-  renderTables();
-  renderSummary();
+  renderNews();
   renderTicker();
-  renderResearch(document.getElementById('researchInput')?.value || undefined);
+  await renderResearch(document.getElementById('researchInput')?.value || undefined);
 }
 
 async function loadNews() {
-  if (!FH_KEY) {
-    renderNews();
-    return;
+  const newsData = await fetchFromBackend('/news');
+  if (Array.isArray(newsData) && newsData.length) {
+    state.news = newsData.slice(0, 5).map(item => ({
+      source: item.source || 'Newswire',
+      headline: item.headline,
+      age: relativeTime(item.datetime),
+      tag: inferTag(item.headline)
+    })).filter(x => x.headline);
   }
-  try {
-    const res = await fetch(`https://finnhub.io/api/v1/news?category=general&token=${FH_KEY}`);
-    const data = await res.json();
-    if (Array.isArray(data) && data.length) {
-      state.news = data.slice(0, 5).map(item => ({
-        source: item.source || 'Newswire',
-        headline: item.headline,
-        age: relativeTime(item.datetime),
-        tag: inferTag(item.headline)
-      })).filter(x => x.headline);
-    }
-  } catch {}
   renderNews();
-  renderSummary();
-  renderResearch(document.getElementById('researchInput')?.value || undefined);
+  renderTicker();
+  await renderResearch(document.getElementById('researchInput')?.value || undefined);
 }
 
 function inferTag(headline = '') {
@@ -389,30 +480,22 @@ function relativeTime(unix) {
   return `${Math.floor(hrs / 24)} d ago`;
 }
 
-async function fetchFredLatest(seriesId) {
-  if (!FRED_KEY) return null;
-  try {
-    const res = await fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${FRED_KEY}&sort_order=desc&file_type=json&limit=10`);
-    const data = await res.json();
-    const value = Number(data.observations?.find(obs => obs.value !== '.')?.value);
-    return Number.isFinite(value) ? value : null;
-  } catch {
-    return null;
-  }
-}
+
 
 async function loadRatesContext() {
-  const [twoY, tenY, sofr] = await Promise.all([
-    fetchFredLatest('DGS2'),
-    fetchFredLatest('DGS10'),
-    fetchFredLatest('SOFR')
-  ]);
-  if (Number.isFinite(twoY)) state.yields['2Y'] = twoY;
-  if (Number.isFinite(tenY)) state.yields['10Y'] = tenY;
-  if (Number.isFinite(sofr)) state.rates.sofr = sofr.toFixed(2);
+  const yieldsData = await fetchFromBackend('/yields');
+  if (yieldsData) {
+    const twoY = yieldsData['2Y']?.value;
+    const tenY = yieldsData['10Y']?.value;
+    const sofr = yieldsData['1M']?.value; // Using 1M as proxy for SOFR
+    
+    if (twoY && twoY !== 'N/A') state.yields['2Y'] = Number(twoY);
+    if (tenY && tenY !== 'N/A') state.yields['10Y'] = Number(tenY);
+    if (sofr && sofr !== 'N/A') state.rates.sofr = Number(sofr).toFixed(2);
+  }
+  renderMacro();
   renderTicker();
-  renderSummary();
-  renderResearch(document.getElementById('researchInput')?.value || undefined);
+  await renderResearch(document.getElementById('researchInput')?.value || undefined);
 }
 
 function initWatchlistForm() {

@@ -1,6 +1,30 @@
-const TD_KEY = typeof CONFIG !== 'undefined' ? CONFIG.TD_KEY : '';
-const FRED_KEY = typeof CONFIG !== 'undefined' ? CONFIG.FRED_KEY : '';
-const FH_KEY = typeof CONFIG !== 'undefined' ? CONFIG.FINNHUB_KEY : '';
+// API key variables (fallback to empty if backend is used)
+const TD_KEY = '';  // No longer needed - using backend
+const FRED_KEY = '';  // No longer needed - using backend
+const FH_KEY = '';  // No longer needed - using backend
+
+// Backend API base URL
+const BACKEND_URL = 'http://localhost:8001/api';
+
+// Helper function to fetch from backend with fallback
+async function fetchFromBackend(endpoint, options = {}) {
+  try {
+    const hasBody = options.body !== undefined;
+    const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+      method: options.method || 'GET',
+      headers: {
+        ...(hasBody && { 'Content-Type': 'application/json' }),
+        ...options.headers
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.warn(`Backend fetch failed for ${endpoint}:`, error);
+    return null;  // Return null to trigger fallback
+  }
+}
 
 const FALLBACK = {
   alerts: [
@@ -59,6 +83,16 @@ const FALLBACK = {
       ['Auto loan prime', '4.67%']
     ]
   },
+  stocks: {
+    AAPL: { price: 212.88, changePct: 0.71 },
+    MSFT: { price: 431.12, changePct: 0.66 },
+    NVDA: { price: 118.37, changePct: 1.98 },
+    AMZN: { price: 189.08, changePct: 0.41 },
+    GOOGL: { price: 168.74, changePct: 0.39 },
+    META: { price: 528.47, changePct: 0.58 },
+    TSLA: { price: 171.22, changePct: -0.92 },
+    JPM: { price: 201.14, changePct: 0.36 }
+  },
   news: [
     { source: 'Reuters', title: 'US fighter jet shot down over Iran, search underway for crew member, officials say', tag: 'MKT', age: '57m ago' },
     { source: 'Reuters', title: 'Israeli strikes Beirut, US warns Iran may hit Lebanese universities', tag: 'OIL', age: '2h ago' },
@@ -80,7 +114,8 @@ const indexDefs = [
   { id: 'iwm', symbol: 'IWM', label: 'IWM' }
 ];
 
-const watchSymbols = ['SPY','QQQ','DIA','IWM','VTI','VOO','XLK','XLF','XLE','GLD','SLV','USO','AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM'];
+const watchSymbols = ['SPY','QQQ','DIA','IWM','VTI','VOO','GLD','SLV','AAPL','MSFT'];
+const stockDefs = ['AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM'];
 
 const yieldDefs = [
   ['1M', 'DGS1MO'], ['3M', 'DGS3MO'], ['6M', 'DGS6MO'], ['1Y', 'DGS1'],
@@ -93,6 +128,7 @@ let yieldChart;
 let selectedIndex = 'spy';
 const indexStore = {};
 const watchlistStore = {};
+const yieldStore = { '2Y': 3.88, '10Y': 4.39 };
 
 function setDate() {
   const el = document.getElementById('navDate');
@@ -142,10 +178,7 @@ function renderMarketRows() {
     const change = `${item.changePct >= 0 ? '+' : ''}${item.changePct.toFixed(2)}%`;
     return `
       <div class="data-row">
-        <div>
-          <div class="label-main">${def.label}</div>
-          <div class="label-sub">ETF proxy / free feed</div>
-        </div>
+        <div class="label-main">${def.label}</div>
         <div class="value-main">$${Number(item.price).toFixed(2)}</div>
         <div class="change-main ${item.changePct >= 0 ? 'up' : 'down'}">${change}</div>
       </div>
@@ -158,14 +191,32 @@ function renderCommodityRows() {
   const wrap = document.getElementById('commodityRows');
   wrap.innerHTML = FALLBACK.commodities.map(item => `
     <div class="data-row">
-      <div>
-        <div class="label-main">${item.label}</div>
-        <div class="label-sub">Macro / commodity monitor</div>
-      </div>
+      <div class="label-main">${item.label}</div>
       <div class="value-main">${item.value}</div>
       <div class="change-main flat">${item.change}</div>
     </div>
   `).join('');
+}
+
+function renderStockRows() {
+  const wrap = document.getElementById('stockRows');
+  if (!wrap) return;
+  wrap.innerHTML = stockDefs.map(symbol => {
+    const stored = watchlistStore[symbol];
+    const fb = FALLBACK.stocks?.[symbol];
+    const price = stored?.price ?? fb?.price ?? null;
+    const changePct = stored?.changePct ?? fb?.changePct ?? null;
+    const priceStr = Number.isFinite(price) ? `$${price.toFixed(2)}` : '—';
+    const changeStr = Number.isFinite(changePct) ? `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%` : '—';
+    const cls = Number.isFinite(changePct) ? (changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat') : 'flat';
+    return `
+      <div class="data-row">
+        <div class="label-main">${symbol}</div>
+        <div class="value-main">${priceStr}</div>
+        <div class="change-main ${cls}">${changeStr}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderRates() {
@@ -194,14 +245,20 @@ function renderNews() {
 
 function renderWire() {
   const wrap = document.getElementById('wireList');
-  wrap.innerHTML = FALLBACK.wire.map(item => `
-    <div class="wire-item wide-wire-item">
-      <div>
-        <div class="wire-headline">${item.headline}</div>
-        <div class="wire-meta">${item.source}</div>
-      </div>
-      <div></div>
-      <div class="change-main flat wire-age">${item.age}</div>
+  const wireItems = FALLBACK.wire.map(item => ({ source: item.source, headline: item.headline, age: item.age }));
+  const newsItems = FALLBACK.news.map(item => ({ source: item.source, headline: item.title, age: item.age }));
+  const seen = new Set();
+  const combined = [...wireItems, ...newsItems].filter(item => {
+    const key = item.headline.slice(0, 50);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  wrap.innerHTML = combined.slice(0, 8).map(item => `
+    <div class="news-item">
+      <div class="news-source">${item.source}</div>
+      <div class="news-headline">${item.headline}</div>
+      <div class="news-age">${item.age}</div>
     </div>
   `).join('');
 }
@@ -286,35 +343,24 @@ function drawYieldChart(values) {
 }
 
 async function fetchTDSeries(symbol) {
-  if (!TD_KEY) return null;
-  try {
-    const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=30&apikey=${TD_KEY}`);
-    const data = await res.json();
-    if (!data.values || data.status === 'error') return null;
-    const ordered = data.values.slice().reverse();
-    const series = ordered.map(d => Number(d.close)).filter(n => Number.isFinite(n));
-    const dates = ordered.map(d => d.datetime || d.date);
-    if (series.length < 2) return null;
-    const price = series[series.length - 1];
-    const prev = series[series.length - 2];
-    return { price, changePct: ((price - prev) / prev) * 100, closes: series, dates };
-  } catch {
-    return null;
-  }
+  const data = await fetchFromBackend(`/candles?symbol=${encodeURIComponent(symbol)}&interval=1day&limit=30`);
+  if (!data || !data.values) return null;
+  const ordered = data.values.slice().reverse();
+  const series = ordered.map(d => Number(d.close)).filter(n => Number.isFinite(n));
+  const dates = ordered.map(d => d.datetime || d.date);
+  if (series.length < 2) return null;
+  const price = series[series.length - 1];
+  const prev = series[series.length - 2];
+  return { price, changePct: ((price - prev) / prev) * 100, closes: series, dates };
 }
 
 async function fetchTDQuote(symbol) {
-  if (!TD_KEY) return null;
-  try {
-    const res = await fetch(`https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}&apikey=${TD_KEY}`);
-    const data = await res.json();
-    const price = Number(data.close || data.price);
-    const changePct = Number(data.percent_change);
-    if (!Number.isFinite(price)) return null;
-    return { symbol, price, changePct: Number.isFinite(changePct) ? changePct : 0 };
-  } catch {
-    return null;
-  }
+  const data = await fetchFromBackend(`/quote?symbol=${encodeURIComponent(symbol)}`);
+  if (!data) return null;
+  const price = Number(data.close || data.price);
+  const changePct = Number(data.change_percent || data.percent_change);
+  if (!Number.isFinite(price)) return null;
+  return { symbol, price, changePct: Number.isFinite(changePct) ? changePct : 0 };
 }
 
 async function loadIndices() {
@@ -344,53 +390,71 @@ function renderWatchlistRows() {
 }
 
 async function loadWatchlist() {
-  for (const symbol of watchSymbols) {
-    const quote = await fetchTDQuote(symbol);
-    if (quote) watchlistStore[symbol] = quote;
+  const allFetchSymbols = [...new Set([...watchSymbols, ...stockDefs, 'VIX', 'USO'])];
+  // Use batch quotes for efficiency
+  const batchData = await fetchFromBackend('/quotes', {
+    method: 'POST',
+    body: allFetchSymbols
+  });
+
+  if (batchData) {
+    // Process batch results
+    for (const symbol of allFetchSymbols) {
+      const quoteData = batchData[symbol];
+      if (quoteData && !quoteData.error) {
+        watchlistStore[symbol] = {
+          symbol,
+          price: Number(quoteData.close || quoteData.price),
+          changePct: Number(quoteData.change_percent || quoteData.percent_change) || 0
+        };
+      }
+    }
+  } else {
+    // Fallback to individual calls
+    for (const symbol of allFetchSymbols) {
+      const quote = await fetchTDQuote(symbol);
+      if (quote) watchlistStore[symbol] = quote;
+    }
   }
   renderWatchlistRows();
+  renderStockRows();
 }
 
-async function fetchFredLatest(seriesId) {
-  if (!FRED_KEY) return null;
-  try {
-    const res = await fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${FRED_KEY}&sort_order=desc&file_type=json&limit=10`);
-    const data = await res.json();
-    const val = data.observations?.find(obs => obs.value !== '.')?.value;
-    const num = Number(val);
-    return Number.isFinite(num) ? num : null;
-  } catch {
-    return null;
-  }
-}
 
 async function loadYields() {
+  const yieldsData = await fetchFromBackend('/yields');
+  if (!yieldsData) {
+    // Fallback to static data
+    const values = FALLBACK.yields.map(y => ({ tenor: y.tenor, value: y.value }));
+    renderYieldTable(values);
+    drawYieldChart(values);
+    return;
+  }
+
   const values = [];
   for (const [tenor, series] of yieldDefs) {
+    const yieldInfo = yieldsData[tenor];
+    const value = yieldInfo && yieldInfo.value !== 'N/A' ? Number(yieldInfo.value) : null;
     const fallback = FALLBACK.yields.find(v => v.tenor === tenor)?.value ?? null;
-    const live = await fetchFredLatest(series);
-    values.push({ tenor, value: live ?? fallback ?? 0 });
+    values.push({ tenor, value: value ?? fallback ?? 0 });
   }
+  values.forEach(v => { yieldStore[v.tenor] = v.value; });
   renderYieldTable(values);
   drawYieldChart(values);
 }
 
 async function loadWireFromFinnhub() {
-  if (!FH_KEY) return;
-  try {
-    const res = await fetch(`https://finnhub.io/api/v1/news?category=general&token=${FH_KEY}`);
-    const data = await res.json();
-    if (!Array.isArray(data)) return;
-    const rows = data.slice(0, 6).map(item => ({
-      source: item.source || 'Newswire',
-      headline: item.headline,
-      age: relativeTime(item.datetime)
-    })).filter(item => item.headline);
-    if (rows.length) {
-      FALLBACK.wire = rows;
-      renderWire();
-    }
-  } catch {}
+  const newsData = await fetchFromBackend('/news');
+  if (!Array.isArray(newsData)) return;
+  const rows = newsData.slice(0, 6).map(item => ({
+    source: item.source || 'Newswire',
+    headline: item.headline,
+    age: relativeTime(item.datetime)
+  })).filter(item => item.headline);
+  if (rows.length) {
+    FALLBACK.wire = rows;
+    renderWire();
+  }
 }
 
 function relativeTime(unix) {
@@ -459,13 +523,123 @@ function initNotes() {
   render();
 }
 
+// ── Dashboard Research Bot ──────────────────────────────────────────────────
+
+function quoteForDash(symbol) {
+  const indexDef = indexDefs.find(d => d.symbol === symbol);
+  if (indexDef && indexStore[indexDef.id]) return indexStore[indexDef.id];
+  if (watchlistStore[symbol]) return watchlistStore[symbol];
+  return { price: null, changePct: null };
+}
+
+function fmtMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '--';
+  return `$${n >= 1000 ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : n.toFixed(2)}`;
+}
+
+function fmtPct(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '--';
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+}
+
+function marketToneDash() {
+  const avg = indexDefs.reduce((sum, def) => {
+    const item = indexStore[def.id] || FALLBACK.indices[def.id];
+    return sum + (item ? item.changePct : 0);
+  }, 0) / indexDefs.length;
+  const vix = quoteForDash('VIX');
+  const vixPrice = Number(vix.price || 23.87);
+  if (avg > 0.3 && vixPrice < 20) return 'Risk-on bias with volatility contained.';
+  if (avg > 0 && vixPrice < 25) return 'Cautiously constructive tone with selective risk appetite.';
+  if (avg < 0 && vixPrice > 25) return 'Risk-off tone with defensive positioning and elevated caution.';
+  return 'Mixed market tone with cross-currents between equities, rates, and macro headlines.';
+}
+
+function summarizeDash(query) {
+  const q = (query || '').toLowerCase();
+  const spy = quoteForDash('SPY');
+  const qqq = quoteForDash('QQQ');
+  const dia = quoteForDash('DIA');
+  const iwm = quoteForDash('IWM');
+  const vix = quoteForDash('VIX');
+  const gld = quoteForDash('GLD');
+  const uso = quoteForDash('USO');
+  const slv = quoteForDash('SLV');
+  const twoY = yieldStore['2Y'] || 3.88;
+  const tenY = yieldStore['10Y'] || 4.39;
+  const top = FALLBACK.wire.slice(0, 3);
+
+  let lead = `Markets are showing a ${marketToneDash().toLowerCase()}`;
+  if (q.includes('oil')) lead = `Oil is a macro focus. USO is ${fmtMoney(uso.price)} (${fmtPct(uso.changePct)}), reflecting supply and geopolitical risk.`;
+  if (q.includes('safe') || q.includes('haven') || q.includes('gold')) lead = `Safe-haven assets are in focus. GLD is ${fmtMoney(gld.price)} (${fmtPct(gld.changePct)}) and SLV is ${fmtMoney(slv.price)} (${fmtPct(slv.changePct)}).`;
+  if (q.includes('volatility') || q.includes('tone') || q.includes('risk')) lead = `Market tone: ${marketToneDash()} VIX is ${Number(vix.price || 23.87).toFixed(2)}.`;
+
+  return `
+    <div class="research-answer">
+      <p>${lead}</p>
+      <p><strong>Benchmarks:</strong> SPY ${fmtMoney(spy.price)} (${fmtPct(spy.changePct)}) · QQQ ${fmtMoney(qqq.price)} (${fmtPct(qqq.changePct)}) · DIA ${fmtMoney(dia.price)} (${fmtPct(dia.changePct)}) · IWM ${fmtMoney(iwm.price)} (${fmtPct(iwm.changePct)})</p>
+      <p><strong>Volatility &amp; rates:</strong> VIX ${Number(vix.price || 23.87).toFixed(2)} · 2Y ${twoY.toFixed(2)}% · 10Y ${tenY.toFixed(2)}%</p>
+      <p><strong>Commodities:</strong> GLD ${fmtMoney(gld.price)} (${fmtPct(gld.changePct)}) · USO ${fmtMoney(uso.price)} (${fmtPct(uso.changePct)})</p>
+      ${top.length ? `<p><strong>Wire:</strong> ${top[0].source} — ${top[0].headline}</p>` : ''}
+      <p><strong>Tone:</strong> ${marketToneDash()}</p>
+    </div>
+  `;
+}
+
+async function renderDashResearch(query) {
+  const out = document.getElementById('dashResearchOutput');
+  if (!out) return;
+  out.innerHTML = '<span style="color:var(--muted);font-size:10px">Analyzing...</span>';
+
+  const summaryData = await fetchFromBackend('/research-summary', {
+    method: 'POST',
+    body: { symbols: ['SPY', 'QQQ', 'VIX'] }
+  });
+
+  if (summaryData) {
+    out.innerHTML = `
+      <div class="research-answer">
+        <p>${summaryData.summary || 'Market analysis unavailable.'}</p>
+        ${summaryData.market_tone ? `<p><strong>Tone:</strong> ${summaryData.market_tone}</p>` : ''}
+        ${summaryData.volatility_risk ? `<p><strong>Volatility:</strong> ${summaryData.volatility_risk}</p>` : ''}
+        ${summaryData.commodities_rates ? `<p><strong>Commodities &amp; rates:</strong> ${summaryData.commodities_rates}</p>` : ''}
+        ${summaryData.conclusion ? `<p><strong>Conclusion:</strong> ${summaryData.conclusion}</p>` : ''}
+      </div>
+    `;
+  } else {
+    out.innerHTML = summarizeDash(query);
+  }
+}
+
+function initDashResearch() {
+  const input = document.getElementById('dashResearchInput');
+  const btn = document.getElementById('dashResearchBtn');
+  if (!input || !btn) return;
+
+  btn.addEventListener('click', async () => {
+    const query = input.value.trim();
+    await renderDashResearch(query || "What's going on with the markets today?");
+  });
+
+  document.querySelectorAll('[data-dash-prompt]').forEach(chip => {
+    chip.addEventListener('click', async () => {
+      input.value = chip.dataset.dashPrompt;
+      await renderDashResearch(chip.dataset.dashPrompt);
+    });
+  });
+
+  renderDashResearch("What's going on with the markets today?");
+}
+
 function init() {
   setDate();
   populateTicker();
   renderHero();
   renderCommodityRows();
+  renderStockRows();
   renderRates();
-  renderNews();
   renderWire();
   renderMarketRows();
   renderWatchlistRows();
@@ -473,7 +647,7 @@ function init() {
   drawMainChart();
   renderYieldTable(FALLBACK.yields);
   drawYieldChart(FALLBACK.yields);
-  initNotes();
+  initDashResearch();
   loadIndices();
   loadWatchlist();
   loadYields();

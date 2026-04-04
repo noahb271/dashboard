@@ -94,6 +94,7 @@ a { color: inherit; }
 }
 .nav-links a.active,
 .nav-links a:hover { color: var(--green); background: rgba(77,184,122,0.06); }
+.nav-dim { opacity: 0.38; }
 .nav-meta {
   display: flex;
   align-items: center;
@@ -457,6 +458,37 @@ a { color: inherit; }
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
+.market-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.market-row {
+  border-bottom: 1px solid rgba(100,150,100,0.1);
+  padding: 8px 0;
+  display: grid;
+  grid-template-columns: 60px 1fr 90px 80px;
+  gap: 10px;
+  align-items: center;
+}
+.market-row:last-child { border-bottom: none; }
+.market-symbol { color: var(--green); font-weight: 700; font-size: 13px; }
+.market-name { color: var(--muted); font-size: 11px; }
+.market-price { text-align: right; color: var(--text); font-weight: 600; }
+.market-change { text-align: right; font-size: 12px; }
+.news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.news-item {
+  border-left: 2px solid var(--line);
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.01);
+}
+.news-source { color: var(--green); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
+.news-headline { color: var(--text); font-size: 12px; line-height: 1.4; margin-bottom: 3px; }
+.news-age { color: var(--muted); font-size: 10px; }
 .benchmark-card {
   border: 1px solid var(--line);
   background: rgba(255,255,255,0.01);
@@ -495,6 +527,24 @@ a { color: inherit; }
 .table-name { color: var(--text); }
 .table-price,
 .table-change { text-align: right; }
+
+#dashResearchInput {
+  width: 100%;
+  background: #06110d;
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 8px;
+  font: inherit;
+  min-height: 62px;
+  resize: vertical;
+  display: block;
+  margin-bottom: 8px;
+}
+.research-answer p { margin: 0 0 6px; font-size: 11px; line-height: 1.5; color: var(--text); }
+.research-answer p strong { color: var(--green); }
+.research-answer h4 { margin: 8px 0 4px; color: var(--green); font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; }
+.research-answer ul { margin: 0 0 6px; padding-left: 16px; }
+.research-answer li { font-size: 10px; line-height: 1.5; margin-bottom: 2px; }
 
 @media (max-width: 1200px) {
   .dashboard-grid,

@@ -18,7 +18,7 @@
       <a class="brand" href="index.html">FINANCE<span>.</span>MONITOR</a>
       <nav class="nav-links">
         <a href="index.html" class="active">Dashboard</a>
-        <a href="market-intel.html">Market Intel</a>
+        <a href="market-intel.html" class="nav-dim">Market Intel</a>
       </nav>
       <div class="nav-meta">
         <div class="nav-badge">Single-page monitor</div>
@@ -38,13 +38,21 @@
       <div class="column-stack left-rail">
         <section class="widget" id="marketOverviewWidget">
           <div class="widget-header">
-            <div class="widget-title">Market overview</div>
-            <div class="widget-badge">Aligned columns</div>
+            <div class="widget-title">US Indexes</div>
+            <div class="widget-badge">ETF proxies</div>
           </div>
           <div class="widget-body">
-            <div class="section-caption">US indexes</div>
             <div class="metric-list" id="marketRows"></div>
-            <div class="proxy-note">Display labels use ETF tickers shown on the page. Twelve Data remains the data layer.</div>
+          </div>
+        </section>
+
+        <section class="widget" id="stocksWidget">
+          <div class="widget-header">
+            <div class="widget-title">Stocks</div>
+            <div class="widget-badge">Mega-cap watchlist</div>
+          </div>
+          <div class="widget-body">
+            <div class="metric-list" id="stockRows"></div>
           </div>
         </section>
 
@@ -58,15 +66,6 @@
           </div>
         </section>
 
-        <section class="widget" id="newsWidget">
-          <div class="widget-header">
-            <div class="widget-title">News</div>
-            <div class="widget-badge">Condensed feed</div>
-          </div>
-          <div class="widget-body">
-            <div class="news-grid" id="newsGrid"></div>
-          </div>
-        </section>
       </div>
 
       <div class="column-stack center-rail">
@@ -99,8 +98,8 @@
 
         <section class="widget wire-wide" id="wireWidget">
           <div class="widget-header">
-            <div class="widget-title">Wire</div>
-            <div class="widget-badge">Live / fallback</div>
+            <div class="widget-title">News / Wire</div>
+            <div class="widget-badge">Live feed</div>
           </div>
           <div class="widget-body">
             <div class="wire-list" id="wireList"></div>
@@ -149,24 +148,23 @@
           </div>
         </section>
 
-        <section class="widget" id="notesWidget">
+        <section class="widget" id="researchWidget">
           <div class="widget-header">
-            <div class="widget-title">Notes</div>
-            <div class="widget-badge">Local storage</div>
+            <div class="widget-title">Research</div>
+            <div class="widget-badge">AI assistant</div>
           </div>
           <div class="widget-body">
-            <div class="notes-composer">
-              <input id="noteTitle" type="text" placeholder="Title">
-              <select id="noteTag">
-                <option value="macro">Macro</option>
-                <option value="markets">Markets</option>
-                <option value="fed">Fed</option>
-                <option value="class">Class / research</option>
-              </select>
-              <textarea id="noteBody" placeholder="Add notes, trade ideas, class takeaways, or headlines to watch..."></textarea>
-              <div class="notes-actions"><button class="btn-terminal" id="saveNote">Save note</button></div>
+            <div class="research-prompts" style="margin-bottom:8px">
+              <button class="prompt-chip" data-dash-prompt="What's going on with the markets today?">Markets today?</button>
+              <button class="prompt-chip" data-dash-prompt="Summarize stocks, commodities, and volatility">Stocks &amp; macro</button>
+              <button class="prompt-chip" data-dash-prompt="Why is oil moving?">Oil</button>
+              <button class="prompt-chip" data-dash-prompt="How are safe-haven assets behaving?">Safe havens</button>
             </div>
-            <div class="note-list" id="notesList"></div>
+            <textarea id="dashResearchInput" placeholder="Ask about the market, rates, or macro..."></textarea>
+            <div class="research-actions" style="margin-bottom:8px">
+              <button class="btn-terminal" id="dashResearchBtn">Run analysis</button>
+            </div>
+            <div class="research-output" id="dashResearchOutput" style="margin-top:8px"><span style="color:var(--muted);font-size:10px">Loading market overview...</span></div>
           </div>
         </section>
       </div>
