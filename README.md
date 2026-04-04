@@ -15,11 +15,10 @@ A personal finance dashboard built with pure HTML/CSS/JS, hosted on GitHub Pages
 
 To enable live data from the Federal Reserve:
 
-1. Get a free API key at https://fred.stlouisfed.org/docs/api/api_key.html
-2. Open `index.html` and `treasuries.html` in a text editor
-3. Find the line: `const FRED_KEY = '77b7ca5506ad1762a5caeeee15a023f7';`
-4. Replace `77b7ca5506ad1762a5caeeee15a023f7` with your actual key
-5. Save and upload to GitHub
+1. Copy `config.example.js` to `config.js`.
+2. Edit `config.js` and replace the placeholder values with your real keys.
+3. Keep `config.js` private; it is listed in `.gitignore` so it will not be uploaded to GitHub.
+4. Open `index.html` or `market-intel.html` in a browser to view the dashboard locally.
 
 Without the key, the dashboard shows static data from March 2026.
 
