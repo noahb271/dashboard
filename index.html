@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FINANCE MONITOR // COMMAND DASHBOARD</title>
+  <script src="theme.js"></script>
+  <script src="config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="nav-row">
+      <a class="brand" href="index.html">FINANCE<span>.</span>MONITOR</a>
+      <nav class="nav-links">
+        <a href="index.html" class="active">Dashboard</a>
+        <a href="market-intel.html">Market Intel</a>
+      </nav>
+      <div class="nav-meta">
+        <div class="nav-badge">Single-page monitor</div>
+        <div class="nav-date" id="navDate"></div>
+        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">Light</button>
+      </div>
+    </div>
+    <div class="ticker-row">
+      <div class="ticker-title">Alert wire</div>
+      <div class="ticker-stream"><div class="ticker-inner" id="tickerInner"></div></div>
+      <div class="ticker-note">Proxy-friendly build</div>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="dashboard-grid v4-layout">
+      <div class="column-stack left-rail">
+        <section class="widget" id="marketOverviewWidget">
+          <div class="widget-header">
+            <div class="widget-title">Market overview</div>
+            <div class="widget-badge">Aligned columns</div>
+          </div>
+          <div class="widget-body">
+            <div class="section-caption">US indexes</div>
+            <div class="metric-list" id="marketRows"></div>
+            <div class="proxy-note">Display labels use ETF tickers shown on the page. Twelve Data remains the data layer.</div>
+          </div>
+        </section>
+
+        <section class="widget" id="commodityWidget">
+          <div class="widget-header">
+            <div class="widget-title">Commodities / vol</div>
+            <div class="widget-badge">Separate section</div>
+          </div>
+          <div class="widget-body">
+            <div class="metric-list" id="commodityRows"></div>
+          </div>
+        </section>
+
+        <section class="widget" id="newsWidget">
+          <div class="widget-header">
+            <div class="widget-title">News</div>
+            <div class="widget-badge">Condensed feed</div>
+          </div>
+          <div class="widget-body">
+            <div class="news-grid" id="newsGrid"></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="column-stack center-rail">
+        <section class="widget" id="commandWidget">
+          <div class="widget-header">
+            <div class="widget-title">Command dashboard</div>
+            <div class="widget-badge">World-monitor inspired</div>
+          </div>
+          <div class="widget-body">
+            <div class="hero-overview" id="heroOverview"></div>
+            <div class="chart-head">
+              <div>
+                <div class="chart-name" id="chartName">SPY</div>
+                <div class="widget-note">Compact overview of the main risk tape. Default layout keeps the chart centered on the dashboard.</div>
+              </div>
+              <div class="chart-meta">
+                <div class="chart-price" id="chartPrice">$655.83</div>
+                <div class="hero-change up" id="chartChange">+0.09%</div>
+              </div>
+            </div>
+            <div class="chart-tabs">
+              <button class="chart-tab active" data-index="spy">SPY</button>
+              <button class="chart-tab" data-index="qqq">QQQ</button>
+              <button class="chart-tab" data-index="dia">DIA</button>
+              <button class="chart-tab" data-index="iwm">IWM</button>
+            </div>
+            <div class="chart-canvas-wrap"><canvas id="mainChart"></canvas></div>
+          </div>
+        </section>
+
+        <section class="widget wire-wide" id="wireWidget">
+          <div class="widget-header">
+            <div class="widget-title">Wire</div>
+            <div class="widget-badge">Live / fallback</div>
+          </div>
+          <div class="widget-body">
+            <div class="wire-list" id="wireList"></div>
+          </div>
+        </section>
+
+        <section class="widget" id="watchlistWidget">
+          <div class="widget-header">
+            <div class="widget-title">Watchlist</div>
+            <div class="widget-badge">Twelve Data monitor</div>
+          </div>
+          <div class="widget-body">
+            <div class="yield-table" id="watchlistRows"></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="column-stack right-rail">
+        <section class="widget" id="yieldWidget">
+          <div class="widget-header">
+            <div class="widget-title">Yield curve</div>
+            <div class="widget-badge">Square dashboard module</div>
+          </div>
+          <div class="widget-body yield-wrap">
+            <div class="yield-canvas-wrap"><canvas id="yieldChart"></canvas></div>
+            <div class="yield-table" id="yieldRows"></div>
+          </div>
+        </section>
+
+        <section class="widget" id="ratesWidget">
+          <div class="widget-header">
+            <div class="widget-title">Rates</div>
+            <div class="widget-badge">List format only</div>
+          </div>
+          <div class="widget-body">
+            <div class="rates-grid">
+              <div class="rate-group">
+                <div class="rate-group-title">Policy / benchmark</div>
+                <div class="rate-list" id="policyRates"></div>
+              </div>
+              <div class="rate-group">
+                <div class="rate-group-title">Borrowing / consumer</div>
+                <div class="rate-list" id="borrowingRates"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="widget" id="notesWidget">
+          <div class="widget-header">
+            <div class="widget-title">Notes</div>
+            <div class="widget-badge">Local storage</div>
+          </div>
+          <div class="widget-body">
+            <div class="notes-composer">
+              <input id="noteTitle" type="text" placeholder="Title">
+              <select id="noteTag">
+                <option value="macro">Macro</option>
+                <option value="markets">Markets</option>
+                <option value="fed">Fed</option>
+                <option value="class">Class / research</option>
+              </select>
+              <textarea id="noteBody" placeholder="Add notes, trade ideas, class takeaways, or headlines to watch..."></textarea>
+              <div class="notes-actions"><button class="btn-terminal" id="saveNote">Save note</button></div>
+            </div>
+            <div class="note-list" id="notesList"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
