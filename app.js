@@ -38,7 +38,8 @@ const FALLBACK = {
     spy: { symbol: 'SPY', label: 'SPY', price: 655.83, changePct: 0.09, closes: [683,679,681,676,674,673,671,668,665,666,664,660,659,653,645,646,652,655] },
     qqq: { symbol: 'QQQ', label: 'QQQ', price: 584.98, changePct: 0.11, closes: [610,608,606,604,601,599,598,596,592,589,586,584,582,579,578,581,583,585] },
     dia: { symbol: 'DIA', label: 'DIA', price: 465.06, changePct: -0.09, closes: [474,473,472,471,470,468,469,467,466,465,463,461,459,458,457,460,462,465] },
-    iwm: { symbol: 'IWM', label: 'IWM', price: 251.29, changePct: 0.06, closes: [258,257,255,254,253,251,249,248,246,245,244,243,241,242,244,246,249,251] }
+    iwm: { symbol: 'IWM', label: 'IWM', price: 251.29, changePct: 0.06, closes: [258,257,255,254,253,251,249,248,246,245,244,243,241,242,244,246,249,251] },
+    vix: { symbol: 'VIX', label: 'VIX', price: 23.87, changePct: 0.0 }
   },
   marketOverview: [
     { label: 'SPY', value: '$655.83', change: '+0.09%' },
@@ -102,6 +103,29 @@ const FALLBACK = {
     SLV: { price: 32.00,  changePct: 0.18 },
     USO: { price: 73.00,  changePct: -0.42 }
   },
+  sectors: {
+    XLB:  { price: 87.50,  changePct: 0.12 },
+    XLC:  { price: 79.40,  changePct: 0.21 },
+    XLE:  { price: 91.20,  changePct: -0.33 },
+    XLF:  { price: 41.80,  changePct: 0.18 },
+    XLI:  { price: 132.10, changePct: 0.09 },
+    XLK:  { price: 224.50, changePct: 0.44 },
+    XLP:  { price: 78.30,  changePct: -0.07 },
+    XLRE: { price: 38.20,  changePct: -0.14 },
+    XLU:  { price: 69.10,  changePct: -0.09 },
+    XLV:  { price: 140.20, changePct: 0.05 },
+    XLY:  { price: 198.40, changePct: 0.31 }
+  },
+  spots: {
+    'XAU/USD': { price: 3300.00, changePct: 0.31, label: 'Gold' },
+    'XAG/USD': { price: 34.20,   changePct: 0.18, label: 'Silver' },
+    'USOIL':   { price: 70.80,   changePct: -0.42, label: 'WTI' }
+  },
+  crypto: {
+    'BTC/USD': { price: 82000, changePct: 1.20 },
+    'ETH/USD': { price: 1800,  changePct: 0.85 },
+    'XRP/USD': { price: 2.05,  changePct: 0.43 }
+  },
   news: [
     { source: 'Reuters', title: 'US fighter jet shot down over Iran, search underway for crew member, officials say', tag: 'MKT', age: '57m ago' },
     { source: 'Reuters', title: 'Israeli strikes Beirut, US warns Iran may hit Lebanese universities', tag: 'OIL', age: '2h ago' },
@@ -131,6 +155,9 @@ const indexRowSymbols = ['SPY','QQQ','DIA','IWM','VOO','VTI','VIX'];
 const watchSymbols = ['SPY','QQQ','DIA','IWM','VTI','VOO','GLD','SLV','AAPL','MSFT'];
 const stockDefs = ['AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','XOM','AVGO','NFLX','WMT'];
 const commodityDefs = ['GLD','SLV','USO'];
+const spotDefs = ['XAU/USD','XAG/USD','USOIL'];
+const sectorDefs = ['XLB','XLC','XLE','XLF','XLI','XLK','XLP','XLRE','XLU','XLV','XLY'];
+const cryptoDefs = ['BTC/USD','ETH/USD','XRP/USD'];
 
 const yieldDefs = [
   ['1M', 'DGS1MO'], ['3M', 'DGS3MO'], ['6M', 'DGS6MO'], ['1Y', 'DGS1'],
@@ -140,6 +167,7 @@ const yieldDefs = [
 
 let mainChart;
 let yieldChart;
+let vixChart;
 let selectedIndex = 'spy';
 const indexStore = {};
 const watchlistStore = {};
@@ -217,7 +245,8 @@ function renderMarketRows() {
 
 function renderCommodityRows() {
   const wrap = document.getElementById('commodityRows');
-  wrap.innerHTML = commodityDefs.map(symbol => {
+
+  const proxyRows = commodityDefs.map(symbol => {
     const stored = watchlistStore[symbol];
     const fb = FALLBACK.commodityProxies?.[symbol];
     const price = stored?.price ?? fb?.price ?? null;
@@ -237,6 +266,37 @@ function renderCommodityRows() {
       </div>
     `;
   }).join('');
+
+  const spotRows = spotDefs.map(symbol => {
+    const stored = watchlistStore[symbol];
+    const fb = FALLBACK.spots?.[symbol];
+    const price = stored?.price ?? fb?.price ?? null;
+    const changePct = stored?.changePct ?? fb?.changePct ?? null;
+    const label = fb?.label || symbol;
+    const priceStr = Number.isFinite(price)
+      ? `$${price >= 1000 ? price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : Number(price).toFixed(2)}`
+      : '—';
+    const changeStr = Number.isFinite(changePct)
+      ? `${changePct >= 0 ? '+' : ''}${Number(changePct).toFixed(2)}%`
+      : '—';
+    const cls = Number.isFinite(changePct)
+      ? (changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat')
+      : 'flat';
+    return `
+      <div class="data-row">
+        <div class="label-main">${label}</div>
+        <div class="value-main">${priceStr}</div>
+        <div class="change-main ${cls}">${changeStr}</div>
+      </div>
+    `;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="section-divider">ETF Proxies</div>
+    ${proxyRows}
+    <div class="section-divider">Spot</div>
+    ${spotRows}
+  `;
 }
 
 function renderStockRows() {
@@ -258,6 +318,104 @@ function renderStockRows() {
       </div>
     `;
   }).join('');
+}
+
+function renderSectorRows() {
+  const wrap = document.getElementById('sectorRows');
+  if (!wrap) return;
+  wrap.innerHTML = sectorDefs.map(symbol => {
+    const stored = watchlistStore[symbol];
+    const fb = FALLBACK.sectors?.[symbol];
+    const price = stored?.price ?? fb?.price ?? null;
+    const changePct = stored?.changePct ?? fb?.changePct ?? null;
+    const priceStr = Number.isFinite(price) ? `$${Number(price).toFixed(2)}` : '—';
+    const changeStr = Number.isFinite(changePct)
+      ? `${changePct >= 0 ? '+' : ''}${Number(changePct).toFixed(2)}%`
+      : '—';
+    const cls = Number.isFinite(changePct)
+      ? (changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat')
+      : 'flat';
+    return `
+      <div class="data-row">
+        <div class="label-main">${symbol}</div>
+        <div class="value-main">${priceStr}</div>
+        <div class="change-main ${cls}">${changeStr}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderCryptoRows() {
+  const wrap = document.getElementById('cryptoRows');
+  if (!wrap) return;
+  wrap.innerHTML = cryptoDefs.map(symbol => {
+    const stored = watchlistStore[symbol];
+    const fb = FALLBACK.crypto?.[symbol];
+    const price = stored?.price ?? fb?.price ?? null;
+    const changePct = stored?.changePct ?? fb?.changePct ?? null;
+    const priceStr = Number.isFinite(price)
+      ? `$${price >= 1000 ? price.toLocaleString(undefined, { maximumFractionDigits: 0 }) : Number(price).toFixed(2)}`
+      : '—';
+    const changeStr = Number.isFinite(changePct)
+      ? `${changePct >= 0 ? '+' : ''}${Number(changePct).toFixed(2)}%`
+      : '—';
+    const cls = Number.isFinite(changePct)
+      ? (changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat')
+      : 'flat';
+    const shortLabel = symbol.replace('/USD', '');
+    return `
+      <div class="data-row">
+        <div class="label-main">${shortLabel}</div>
+        <div class="value-main">${priceStr}</div>
+        <div class="change-main ${cls}">${changeStr}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function drawVixChart() {
+  const canvas = document.getElementById('vixChart');
+  if (!canvas) return;
+  const data = await fetchFromBackend('/candles?symbol=VIX&interval=1day&limit=30');
+  let closes = [];
+  if (data && data.values) {
+    const ordered = data.values.slice().reverse();
+    closes = ordered.map(d => Number(d.close)).filter(n => Number.isFinite(n));
+  }
+  if (!closes.length) {
+    closes = [19,20,22,21,24,23,20,19,22,25,24,22,20,19,21,23,25,23,22,21,20,22,24,23,21,20,19,22,24,23];
+  }
+  if (vixChart) vixChart.destroy();
+  vixChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: closes.map(() => ''),
+      datasets: [{
+        data: closes,
+        borderColor: '#d16262',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: true,
+        backgroundColor: 'rgba(209,98,98,0.08)'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: false },
+        y: {
+          position: 'right',
+          ticks: { color: '#6c8777', font: { size: 8 }, maxTicksLimit: 3,
+            callback: v => Number(v).toFixed(0) },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false }
+        }
+      }
+    }
+  });
 }
 
 function renderRates() {
@@ -434,7 +592,11 @@ function renderWatchlistRows() {
 }
 
 async function loadWatchlist() {
-  const allFetchSymbols = [...new Set([...watchSymbols, ...stockDefs, 'VIX', 'USO'])];
+  const allFetchSymbols = [...new Set([
+    ...watchSymbols, ...stockDefs, ...sectorDefs,
+    ...spotDefs, ...cryptoDefs,
+    'VIX', 'USO'
+  ])];
   // Use batch quotes for efficiency
   const batchData = await fetchFromBackend('/quotes', {
     method: 'POST',
@@ -462,7 +624,9 @@ async function loadWatchlist() {
   }
   renderWatchlistRows();
   renderStockRows();
+  renderSectorRows();
   renderCommodityRows();
+  renderCryptoRows();
   renderMarketRows();
 }
 
@@ -685,6 +849,8 @@ function init() {
   renderHero();
   renderCommodityRows();
   renderStockRows();
+  renderSectorRows();
+  renderCryptoRows();
   renderRates();
   renderWire();
   renderMarketRows();
@@ -694,6 +860,7 @@ function init() {
   renderYieldTable(FALLBACK.yields);
   drawYieldChart(FALLBACK.yields);
   initDashResearch();
+  drawVixChart();
   loadIndices();
   loadWatchlist();
   loadYields();

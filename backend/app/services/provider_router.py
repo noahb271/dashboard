@@ -11,7 +11,7 @@ To add a new TD-only symbol, add its ticker to TD_SYMBOLS.
 from app.services import alpaca, twelve_data
 
 # Symbols Alpaca cannot serve — routed to Twelve Data
-TD_SYMBOLS = {"VIX"}
+TD_SYMBOLS = {"VIX", "XAU/USD", "XAG/USD", "USOIL"}
 
 # Crypto pairs — routed to Alpaca's crypto endpoint instead of stocks endpoint
 CRYPTO_SYMBOLS = {"BTC/USD", "ETH/USD", "XRP/USD"}
