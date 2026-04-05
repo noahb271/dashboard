@@ -471,30 +471,103 @@ function formatChartLabel(input, index) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+// Returns how many daily bars to request so we cover Jan 1 → today with buffer.
+function ytdLimit() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const dayOfYear = Math.ceil((now - start) / 86400000);
+  return Math.max(30, Math.ceil((dayOfYear / 365) * 252) + 20);
+}
+
+// Sparse month-label array: emits "Jan"/"Feb"/… only at the first bar of each
+// new month; all other positions are empty string.  Parses YYYY-MM-DD strings
+// directly to avoid UTC-offset issues that arise from `new Date('YYYY-MM-DD')`.
+function ytdMonthLabels(dates) {
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let lastMonth = -1;
+  return dates.map(d => {
+    if (!d || typeof d !== 'string') return '';
+    const parts = d.split('-');
+    if (parts.length < 2) return '';
+    const m = parseInt(parts[1], 10) - 1; // 0-indexed
+    if (m !== lastMonth) {
+      lastMonth = m;
+      return MONTHS[m];
+    }
+    return '';
+  });
+}
+
 function drawMainChart() {
-  const def = indexDefs.find(item => item.id === selectedIndex);
-  const item = indexStore[selectedIndex] || FALLBACK.indices[selectedIndex];
-  const closes = item.closes || [];
-  const labels = (item.dates && item.dates.length === closes.length)
-    ? item.dates.map((d, i) => formatChartLabel(d, i))
-    : closes.map((_, i) => `Day ${i + 1}`);
-  document.getElementById('chartName').textContent = def.label;
-  document.getElementById('chartPrice').textContent = `$${Number(item.price).toFixed(2)}`;
+  const def   = indexDefs.find(d => d.id === selectedIndex);
+  const item  = indexStore[selectedIndex] || FALLBACK.indices[selectedIndex];
+  const closes   = item.closes || [];
+  const hasDates = Array.isArray(item.dates) && item.dates.length === closes.length;
+
+  // Pass raw dates (or numeric indices) as labels — they drive data alignment only.
+  // The tick callback below controls what's actually rendered on the axis.
+  const labels = hasDates ? item.dates : closes.map((_, i) => i);
+
+  document.getElementById('chartName').textContent   = def.label;
+  document.getElementById('chartPrice').textContent  = `$${Number(item.price).toFixed(2)}`;
   document.getElementById('chartChange').textContent = `${item.changePct >= 0 ? '+' : ''}${item.changePct.toFixed(2)}%`;
-  document.getElementById('chartChange').className = `hero-change ${item.changePct >= 0 ? 'up' : 'down'}`;
+  document.getElementById('chartChange').className   = `hero-change ${item.changePct >= 0 ? 'up' : 'down'}`;
 
   const color = item.changePct >= 0 ? '#4db87a' : '#d16262';
+  const dates = item.dates; // captured in closure
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Tick callback: returning null suppresses both the tick mark and its gridline.
+  // Show a month abbreviation only at the first trading day of each new month.
+  // All other positions return null → invisible, no clutter.
+  function xTickCallback(_val, idx) {
+    if (!hasDates) {
+      // No date data yet — show a sparse positional label every ~20 bars
+      return (idx === 0 || idx % 20 === 0) ? `+${idx}d` : null;
+    }
+    const d = dates[idx];
+    if (!d || typeof d !== 'string') return null;
+    const thisMon = d.slice(5, 7);                              // 'MM' from 'YYYY-MM-DD'
+    const prevMon = idx > 0 ? (dates[idx - 1] || '').slice(5, 7) : null;
+    return thisMon !== prevMon ? MONTHS[parseInt(thisMon, 10) - 1] : null;
+  }
+
   if (mainChart) mainChart.destroy();
   mainChart = new Chart(document.getElementById('mainChart'), {
     type: 'line',
-    data: { labels, datasets: [{ data: closes, borderColor: color, borderWidth: 2, pointRadius: 0, tension: 0.35, fill: true, backgroundColor: color + '18' }] },
+    data: {
+      labels,
+      datasets: [{
+        data: closes,
+        borderColor: color,
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.35,
+        fill: true,
+        backgroundColor: color + '18'
+      }]
+    },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: '#6c8777', maxTicksLimit: 6 }, grid: { color: 'rgba(255,255,255,0.04)' }, border: { display: false } },
-        y: { position: 'right', ticks: { color: '#6c8777', callback: value => `$${Number(value).toFixed(0)}` }, grid: { color: 'rgba(255,255,255,0.04)' }, border: { display: false } }
+        x: {
+          ticks: {
+            color: '#6c8777',
+            autoSkip: false,
+            maxRotation: 0,
+            callback: xTickCallback
+          },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false }
+        },
+        y: {
+          position: 'right',
+          ticks: { color: '#6c8777', callback: value => `$${Number(value).toFixed(0)}` },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false }
+        }
       }
     }
   });
@@ -544,14 +617,21 @@ function drawYieldChart(values) {
 }
 
 async function fetchTDSeries(symbol) {
-  const data = await fetchFromBackend(`/candles?symbol=${encodeURIComponent(symbol)}&interval=1day&limit=30`);
+  const limit = ytdLimit();
+  const data = await fetchFromBackend(`/candles?symbol=${encodeURIComponent(symbol)}&interval=1day&limit=${limit}`);
   if (!data || !data.values) return null;
-  const ordered = data.values.slice().reverse();
-  const series = ordered.map(d => Number(d.close)).filter(n => Number.isFinite(n));
-  const dates = ordered.map(d => d.datetime || d.date);
+  const ordered = data.values.slice().reverse(); // oldest-first
+
+  // Keep only bars from the current calendar year (YTD filter)
+  const currentYear = String(new Date().getFullYear());
+  const ytd = ordered.filter(d => (d.datetime || d.date || '').startsWith(currentYear));
+  const bars = ytd.length >= 5 ? ytd : ordered; // fall back if filter is too aggressive
+
+  const series = bars.map(d => Number(d.close)).filter(n => Number.isFinite(n));
+  const dates  = bars.map(d => d.datetime || d.date);
   if (series.length < 2) return null;
   const price = series[series.length - 1];
-  const prev = series[series.length - 2];
+  const prev  = series[series.length - 2];
   return { price, changePct: ((price - prev) / prev) * 100, closes: series, dates };
 }
 
