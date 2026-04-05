@@ -94,7 +94,8 @@ const FALLBACK = {
     JPM: { price: 201.14, changePct: 0.36 },
     XOM:  { price: 117.50, changePct: 0.28 },
     AVGO: { price: 185.00, changePct: 0.84 },
-    NFLX: { price: 915.00, changePct: 0.52 }
+    NFLX: { price: 915.00, changePct: 0.52 },
+    WMT:  { price: 97.00,  changePct: 0.14 }
   },
   commodityProxies: {
     GLD: { price: 280.00, changePct: 0.31 },
@@ -111,7 +112,9 @@ const FALLBACK = {
   { source: 'Reuters', headline: 'US fighter jet shot down over Iran, search underway for crew member, officials say', age: '49m ago' },
   { source: 'Reuters', headline: "Trump's anger over Iran thrusts NATO into fresh crisis", age: '3h ago' },
   { source: 'Reuters', headline: 'Tehran rejected 48-hour ceasefire proposal from US, Iranian media says', age: '4h ago' },
-  { source: 'Reuters', headline: 'Americans have bleak views on Iran war, Reuters/Ipsos poll shows', age: '6h ago' }
+  { source: 'Reuters', headline: 'Americans have bleak views on Iran war, Reuters/Ipsos poll shows', age: '6h ago' },
+  { source: 'CNBC', headline: 'Fed officials signal patience as inflation data remains mixed', age: '7h ago' },
+  { source: 'Bloomberg', headline: 'Oil slips as demand outlook dims on slowing global growth signals', age: '9h ago' }
 ]
 };
 
@@ -126,7 +129,7 @@ const indexDefs = [
 const indexRowSymbols = ['SPY','QQQ','DIA','IWM','VOO','VTI','VIX'];
 
 const watchSymbols = ['SPY','QQQ','DIA','IWM','VTI','VOO','GLD','SLV','AAPL','MSFT'];
-const stockDefs = ['AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','XOM','AVGO','NFLX'];
+const stockDefs = ['AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','XOM','AVGO','NFLX','WMT'];
 const commodityDefs = ['GLD','SLV','USO'];
 
 const yieldDefs = [
@@ -292,7 +295,7 @@ function renderWire() {
     seen.add(key);
     return true;
   });
-  wrap.innerHTML = combined.slice(0, 8).map(item => `
+  wrap.innerHTML = combined.slice(0, 10).map(item => `
     <div class="news-item">
       <div class="news-meta">
         <span class="news-source">${item.source}</span>
@@ -489,7 +492,7 @@ async function loadYields() {
 async function loadWireFromFinnhub() {
   const newsData = await fetchFromBackend('/news');
   if (!Array.isArray(newsData)) return;
-  const rows = newsData.slice(0, 6).map(item => ({
+  const rows = newsData.slice(0, 8).map(item => ({
     source: item.source || 'Newswire',
     headline: item.headline,
     age: relativeTime(item.datetime)

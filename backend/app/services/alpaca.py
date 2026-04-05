@@ -120,6 +120,55 @@ def get_snapshots(symbols: list) -> dict:
     return results
 
 
+def get_crypto_snapshots(symbols: list) -> dict:
+    """
+    Fetch snapshots for crypto pairs (e.g. BTC/USD) using Alpaca's crypto endpoint.
+    Response shape is identical to stock snapshots so _normalize_snapshot reuses as-is.
+    Returns {SYMBOL: normalized_quote_dict, ...}
+    """
+    if not config.ALPACA_API_KEY:
+        return {s: {"error": "Alpaca API key not configured"} for s in symbols}
+
+    results = {}
+    to_fetch = []
+
+    for symbol in symbols:
+        cache_key = f"crypto:{symbol}"
+        if cache_key in _cache and _is_cache_valid(_cache[cache_key], QUOTE_CACHE_DURATION):
+            results[symbol] = _cache[cache_key]["data"]
+        else:
+            to_fetch.append(symbol)
+
+    if not to_fetch:
+        return results
+
+    try:
+        resp = requests.get(
+            f"{DATA_URL}/v1beta3/crypto/us/snapshots",
+            headers=_headers(),
+            params={"symbols": ",".join(to_fetch)},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json().get("snapshots") or {}
+
+        for symbol in to_fetch:
+            snap = data.get(symbol)
+            if not snap:
+                results[symbol] = {"error": f"No crypto data for {symbol}"}
+                continue
+            normalized = _normalize_snapshot(symbol, snap)
+            cache_key = f"crypto:{symbol}"
+            _cache[cache_key] = {"data": normalized, "timestamp": time.time()}
+            results[symbol] = normalized
+
+    except requests.RequestException as e:
+        for symbol in to_fetch:
+            results[symbol] = {"error": f"Alpaca crypto failed: {str(e)}"}
+
+    return results
+
+
 def get_bars(symbol: str, timeframe: str = "1Day", limit: int = 30) -> dict:
     """
     Fetch daily (or other timeframe) bars for a symbol.

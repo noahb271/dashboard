@@ -383,7 +383,8 @@ a { color: inherit; }
 .v4-layout {
   grid-template-columns: 280px minmax(520px, 1.2fr) minmax(300px, 0.95fr);
 }
-.wire-wide .widget-body { padding-top: 6px; }
+.wire-wide .widget-body { padding: 0; }
+#wireWidget { min-height: 340px; }
 .wide-wire-item {
   grid-template-columns: minmax(0, 1fr) 10px 74px;
   gap: 8px;
@@ -482,13 +483,21 @@ a { color: inherit; }
   gap: 8px;
 }
 .news-item {
-  border-left: 2px solid var(--line);
-  padding: 8px 10px;
-  background: rgba(255,255,255,0.01);
+  border-left: 2px solid var(--line-strong);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  padding: 6px 10px;
 }
-.news-source { color: var(--green); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
-.news-headline { color: var(--text); font-size: 12px; line-height: 1.4; margin-bottom: 3px; }
-.news-age { color: var(--muted); font-size: 10px; }
+.news-item:last-child { border-bottom: none; }
+.news-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.news-source { color: var(--green); font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0; }
+.news-headline { color: var(--text); font-size: 11px; line-height: 1.35; }
+.news-age { color: var(--muted); font-size: 9px; white-space: nowrap; }
 .benchmark-card {
   border: 1px solid var(--line);
   background: rgba(255,255,255,0.01);
@@ -545,6 +554,48 @@ a { color: inherit; }
 .research-answer h4 { margin: 8px 0 4px; color: var(--green); font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; }
 .research-answer ul { margin: 0 0 6px; padding-left: 16px; }
 .research-answer li { font-size: 10px; line-height: 1.5; margin-bottom: 2px; }
+
+/* ── Left-rail compact overrides ─────────────────────────────────────────── */
+/* Scoped to .left-rail so center/right column rows are not affected.         */
+
+.left-rail .widget-body {
+  padding: 6px 8px;
+}
+
+/* Fixed three-column grid: ticker | price | change
+   Ticker: 54px covers "GOOGL" in monospace at 11px.
+   Price:  1fr, right-aligned — fills remaining space consistently.
+   Change: 60px covers "+1.98%" with room. */
+.left-rail .data-row {
+  grid-template-columns: 54px 1fr 60px;
+  gap: 6px;
+  min-height: 22px;
+}
+
+/* Ticker label */
+.left-rail .label-main {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Price value */
+.left-rail .value-main {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: unset;
+  text-align: right;
+}
+
+/* % change */
+.left-rail .change-main {
+  font-size: 10px;
+  min-width: unset;
+  text-align: right;
+}
 
 @media (max-width: 1200px) {
   .dashboard-grid,

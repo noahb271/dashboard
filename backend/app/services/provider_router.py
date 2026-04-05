@@ -13,6 +13,9 @@ from app.services import alpaca, twelve_data
 # Symbols Alpaca cannot serve — routed to Twelve Data
 TD_SYMBOLS = {"VIX"}
 
+# Crypto pairs — routed to Alpaca's crypto endpoint instead of stocks endpoint
+CRYPTO_SYMBOLS = {"BTC/USD", "ETH/USD", "XRP/USD"}
+
 # Interval name map shared by both routed candle and bar calls
 _ALPACA_INTERVAL_MAP = {
     "1day":   "1Day",
@@ -52,22 +55,31 @@ def get_quote_routed(symbol: str) -> dict:
         result = twelve_data.get_quote(symbol)
         if isinstance(result, dict) and "error" not in result:
             return _normalize_td_quote(result)
-        return result  # pass errors through unchanged
+        return result
+    if symbol in CRYPTO_SYMBOLS:
+        result = alpaca.get_crypto_snapshots([symbol])
+        return result.get(symbol, {"error": f"No data for {symbol}"})
     return alpaca.get_snapshot(symbol)
 
 
 def get_snapshots_routed(symbols: list) -> dict:
     """
-    Batch quote fetch. TD symbols are fetched individually;
-    all others go to Alpaca's single batch request.
+    Batch quote fetch. Routes each symbol to the correct provider:
+    - TD_SYMBOLS → Twelve Data (individual calls)
+    - CRYPTO_SYMBOLS → Alpaca crypto batch endpoint
+    - Everything else → Alpaca stock batch endpoint
     """
-    td_syms    = [s for s in symbols if s in TD_SYMBOLS]
-    alpaca_syms = [s for s in symbols if s not in TD_SYMBOLS]
+    td_syms     = [s for s in symbols if s in TD_SYMBOLS]
+    crypto_syms = [s for s in symbols if s in CRYPTO_SYMBOLS]
+    alpaca_syms = [s for s in symbols if s not in TD_SYMBOLS and s not in CRYPTO_SYMBOLS]
 
     results = {}
 
     if alpaca_syms:
         results.update(alpaca.get_snapshots(alpaca_syms))
+
+    if crypto_syms:
+        results.update(alpaca.get_crypto_snapshots(crypto_syms))
 
     for symbol in td_syms:
         result = twelve_data.get_quote(symbol)
