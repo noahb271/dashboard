@@ -1,4 +1,4 @@
-from app.services.alpaca import get_snapshot as get_quote
+from app.services.provider_router import get_quote_routed as get_quote
 from app.services.fred import get_treasury_yields
 from app.services.finnhub import get_news
 
