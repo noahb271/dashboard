@@ -1,1 +1,17 @@
+# Frontend secrets
 config.js
+
+# Python environment
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment secrets
+.env
+backend/.env
