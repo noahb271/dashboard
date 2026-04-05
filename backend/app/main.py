@@ -5,6 +5,7 @@ from app.routers import quotes, candles, news, yields, research
 app = FastAPI(title="Finance Dashboard Backend", version="1.0.0")
 
 allowed_origins = [
+    "https://noahb271.github.io",
     "http://localhost:5500",
     "http://127.0.0.1:5500",
     "http://localhost:5501",

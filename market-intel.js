@@ -4,7 +4,7 @@ const FH_KEY = '';  // No longer needed - using backend
 const FRED_KEY = '';  // No longer needed - using backend
 
 // Backend API base URL
-const BACKEND_URL = 'http://localhost:8001/api';
+const BACKEND_URL = 'https://dashboard-backend-1wmo.onrender.com/api';
 
 // Helper function to fetch from backend with fallback
 async function fetchFromBackend(endpoint, options = {}) {
