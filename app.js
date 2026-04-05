@@ -91,7 +91,15 @@ const FALLBACK = {
     GOOGL: { price: 168.74, changePct: 0.39 },
     META: { price: 528.47, changePct: 0.58 },
     TSLA: { price: 171.22, changePct: -0.92 },
-    JPM: { price: 201.14, changePct: 0.36 }
+    JPM: { price: 201.14, changePct: 0.36 },
+    XOM:  { price: 117.50, changePct: 0.28 },
+    AVGO: { price: 185.00, changePct: 0.84 },
+    NFLX: { price: 915.00, changePct: 0.52 }
+  },
+  commodityProxies: {
+    GLD: { price: 280.00, changePct: 0.31 },
+    SLV: { price: 32.00,  changePct: 0.18 },
+    USO: { price: 73.00,  changePct: -0.42 }
   },
   news: [
     { source: 'Reuters', title: 'US fighter jet shot down over Iran, search underway for crew member, officials say', tag: 'MKT', age: '57m ago' },
@@ -100,11 +108,11 @@ const FALLBACK = {
     { source: 'CNBC', title: 'Wall Street snapped its 5-week losing streak. Here are 3 themes that caught our eye', tag: 'MKT', age: '8h ago' }
   ],
   wire: [
-    { source: 'Reuters', headline: 'US fighter jet shot down over Iran, search underway for crew member, officials say', age: '49m ago' },
-    { source: 'Reuters', headline: 'Trump’s anger over Iran thrusts NATO into fresh crisis', age: '3h ago' },
-    { source: 'Reuters', headline: 'Tehran rejected 48-hour ceasefire proposal from US, Iranian media says', age: '4h ago' },
-    { source: 'Reuters', headline: 'Americans have bleak views on Iran war, Reuters/Ipsos poll shows', age: '6h ago' }
-  ]
+  { source: 'Reuters', headline: 'US fighter jet shot down over Iran, search underway for crew member, officials say', age: '49m ago' },
+  { source: 'Reuters', headline: "Trump's anger over Iran thrusts NATO into fresh crisis", age: '3h ago' },
+  { source: 'Reuters', headline: 'Tehran rejected 48-hour ceasefire proposal from US, Iranian media says', age: '4h ago' },
+  { source: 'Reuters', headline: 'Americans have bleak views on Iran war, Reuters/Ipsos poll shows', age: '6h ago' }
+]
 };
 
 const indexDefs = [
@@ -114,8 +122,12 @@ const indexDefs = [
   { id: 'iwm', symbol: 'IWM', label: 'IWM' }
 ];
 
+// Symbols shown in the left-column US Indexes box (separate from chart indexDefs)
+const indexRowSymbols = ['SPY','QQQ','DIA','IWM','VOO','VTI','VIX'];
+
 const watchSymbols = ['SPY','QQQ','DIA','IWM','VTI','VOO','GLD','SLV','AAPL','MSFT'];
-const stockDefs = ['AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM'];
+const stockDefs = ['AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','XOM','AVGO','NFLX'];
+const commodityDefs = ['GLD','SLV','USO'];
 
 const yieldDefs = [
   ['1M', 'DGS1MO'], ['3M', 'DGS3MO'], ['6M', 'DGS6MO'], ['1Y', 'DGS1'],
@@ -173,39 +185,55 @@ function renderHero() {
 
 function renderMarketRows() {
   const wrap = document.getElementById('marketRows');
-  const rows = indexDefs.map(def => {
-    const item = indexStore[def.id] || FALLBACK.indices[def.id];
-    const change = `${item.changePct >= 0 ? '+' : ''}${item.changePct.toFixed(2)}%`;
+  wrap.innerHTML = indexRowSymbols.map(symbol => {
+    // For the four chart symbols prefer indexStore (candle-derived, more accurate)
+    const indexDef = indexDefs.find(d => d.symbol === symbol);
+    const stored = (indexDef && indexStore[indexDef.id]) ? indexStore[indexDef.id] : watchlistStore[symbol];
+    const fbIndex = FALLBACK.indices[symbol.toLowerCase()];
+    const price = stored?.price ?? fbIndex?.price ?? null;
+    const changePct = stored?.changePct ?? fbIndex?.changePct ?? null;
+    // VIX is a volatility index — no $ prefix
+    const priceStr = Number.isFinite(price)
+      ? (symbol === 'VIX' ? Number(price).toFixed(2) : `$${Number(price).toFixed(2)}`)
+      : '—';
+    const changeStr = Number.isFinite(changePct)
+      ? `${changePct >= 0 ? '+' : ''}${Number(changePct).toFixed(2)}%`
+      : '—';
+    const cls = Number.isFinite(changePct)
+      ? (changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat')
+      : 'flat';
     return `
       <div class="data-row">
-        <div class="label-main">${def.label}</div>
-        <div class="value-main">$${Number(item.price).toFixed(2)}</div>
-        <div class="change-main ${item.changePct >= 0 ? 'up' : 'down'}">${change}</div>
+        <div class="label-main">${symbol}</div>
+        <div class="value-main">${priceStr}</div>
+        <div class="change-main ${cls}">${changeStr}</div>
       </div>
     `;
   }).join('');
-  const vix = watchlistStore['VIX'];
-  const vixPrice = vix?.price ?? 23.87;
-  const vixChange = vix?.changePct ?? 0;
-  const vixChangeStr = `${vixChange >= 0 ? '+' : ''}${Number(vixChange).toFixed(2)}%`;
-  wrap.innerHTML = rows + `
-    <div class="data-row">
-      <div class="label-main">VIX</div>
-      <div class="value-main">${Number(vixPrice).toFixed(2)}</div>
-      <div class="change-main ${vixChange >= 0 ? 'up' : 'down'}">${vixChangeStr}</div>
-    </div>
-  `;
 }
 
 function renderCommodityRows() {
   const wrap = document.getElementById('commodityRows');
-  wrap.innerHTML = FALLBACK.commodities.map(item => `
-    <div class="data-row">
-      <div class="label-main">${item.label}</div>
-      <div class="value-main">${item.value}</div>
-      <div class="change-main flat">${item.change}</div>
-    </div>
-  `).join('');
+  wrap.innerHTML = commodityDefs.map(symbol => {
+    const stored = watchlistStore[symbol];
+    const fb = FALLBACK.commodityProxies?.[symbol];
+    const price = stored?.price ?? fb?.price ?? null;
+    const changePct = stored?.changePct ?? fb?.changePct ?? null;
+    const priceStr = Number.isFinite(price) ? `$${Number(price).toFixed(2)}` : '—';
+    const changeStr = Number.isFinite(changePct)
+      ? `${changePct >= 0 ? '+' : ''}${Number(changePct).toFixed(2)}%`
+      : '—';
+    const cls = Number.isFinite(changePct)
+      ? (changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat')
+      : 'flat';
+    return `
+      <div class="data-row">
+        <div class="label-main">${symbol}</div>
+        <div class="value-main">${priceStr}</div>
+        <div class="change-main ${cls}">${changeStr}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderStockRows() {
@@ -266,9 +294,11 @@ function renderWire() {
   });
   wrap.innerHTML = combined.slice(0, 8).map(item => `
     <div class="news-item">
-      <div class="news-source">${item.source}</div>
+      <div class="news-meta">
+        <span class="news-source">${item.source}</span>
+        <span class="news-age">${item.age}</span>
+      </div>
       <div class="news-headline">${item.headline}</div>
-      <div class="news-age">${item.age}</div>
     </div>
   `).join('');
 }
@@ -429,6 +459,7 @@ async function loadWatchlist() {
   }
   renderWatchlistRows();
   renderStockRows();
+  renderCommodityRows();
   renderMarketRows();
 }
 
