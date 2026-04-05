@@ -184,7 +184,17 @@ function renderMarketRows() {
       </div>
     `;
   }).join('');
-  wrap.innerHTML = rows;
+  const vix = watchlistStore['VIX'];
+  const vixPrice = vix?.price ?? 23.87;
+  const vixChange = vix?.changePct ?? 0;
+  const vixChangeStr = `${vixChange >= 0 ? '+' : ''}${Number(vixChange).toFixed(2)}%`;
+  wrap.innerHTML = rows + `
+    <div class="data-row">
+      <div class="label-main">VIX</div>
+      <div class="value-main">${Number(vixPrice).toFixed(2)}</div>
+      <div class="change-main ${vixChange >= 0 ? 'up' : 'down'}">${vixChangeStr}</div>
+    </div>
+  `;
 }
 
 function renderCommodityRows() {
@@ -375,6 +385,7 @@ async function loadIndices() {
 
 function renderWatchlistRows() {
   const wrap = document.getElementById('watchlistRows');
+  if (!wrap) return;
   const rows = watchSymbols.map(symbol => watchlistStore[symbol] || { symbol, price: null, changePct: null });
   wrap.innerHTML = rows.map(item => {
     const price = Number.isFinite(item.price) ? `$${item.price.toFixed(2)}` : '—';
@@ -418,6 +429,7 @@ async function loadWatchlist() {
   }
   renderWatchlistRows();
   renderStockRows();
+  renderMarketRows();
 }
 
 
